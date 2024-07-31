@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mental Bot</title>
+    <style>
+        body {
+            background-color: black;
+            color: green;
+            font-family: monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #terminal {
+            width: 80%;
+            height: 80%;
+            background-color: #000000;
+            border: 1px solid green;
+            padding: 10px;
+            overflow-y: auto;
+        }
+        #content, #prompt {
+            font-size: 20px; /* Increased font size */
+        }
+        #inputLine {
+            display: flex;
+        }
+        #prompt {
+            flex: 1;
+        }
+        .blinking-cursor {
+            font-weight: 100;
+            font-size: 24px;
+            color: green;
+            -webkit-animation: 1s blink step-end infinite;
+            animation: 1s blink step-end infinite;
+        }
+        @keyframes blink {
+            from, to {
+                color: transparent;
+            }
+            50% {
+                color: green;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="terminal">
+        <div id="content"></div>
+        <div id="inputLine">
+            <div id="prompt" contenteditable="true"></div>
+            <div class="blinking-cursor">|</div>
+        </div>
+    </div>
+    <script>
+        const terminal = document.getElementById('terminal');
+        const content = document.getElementById('content');
+        const prompt = document.getElementById('prompt');
+
+        const models = {{ models | tojson }};
+        let selectedModel = null;
+
+        function displayModelOptions() {
+            content.innerHTML += `<div>Select a model:</div>`;
+            models.forEach((model, index) => {
+                content.innerHTML += `<div>[${index + 1}] ${model}</div>`;
+            });
+            content.innerHTML += `<div>Enter the model number: </div>`;
+            terminal.scrollTop = terminal.scrollHeight;
+            prompt.focus();
+        }
+
+        prompt.focus();
+
+        prompt.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const userInput = prompt.innerText.trim();
+                if (selectedModel === null) {
+                    const modelIndex = parseInt(userInput) - 1;
+                    if (modelIndex >= 0 && modelIndex < models.length) {
+                        selectedModel = models[modelIndex];
+                        fetch('/select_model', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ model: selectedModel })
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            content.innerHTML += `<div>Model ${data.model} loaded.</div>`;
+                            content.innerHTML += `<div>Enter your prompt:</div>`;
+                            prompt.innerText = '';
+                        });
+                    } else {
+                        content.innerHTML += `<div>Invalid selection. Try again.</div>`;
+                        prompt.innerText = '';
+                        displayModelOptions();
+                    }
+                } else if (userInput) {
+                    content.innerHTML += `<div>> ${userInput}</div>`;
+                    prompt.innerText = '';
+                    fetch('/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ prompt: userInput })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        typeResponse(data.response);
+                    });
+                }
+            }
+        });
+
+        function typeResponse(response) {
+            let i = 0;
+            const interval = setInterval(() => {
+                if (i < response.length) {
+                    content.innerHTML += response.charAt(i);
+                    terminal.scrollTop = terminal.scrollHeight;
+                    i++;
+                } else {
+                    clearInterval(interval);
+                }
+            }, 20);  // Faster typing animation
+        }
+
+        displayModelOptions();
+    </script>
+</body>
+</html>
